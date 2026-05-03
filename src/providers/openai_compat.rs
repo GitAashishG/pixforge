@@ -5,7 +5,11 @@
 //! OpenAI's shape:
 //!
 //! - Header: `Authorization: Bearer <key>` (default), `api-key: <key>`, or none
-//! - Body: `{"model", "prompt", "n", "size": "WxH", "response_format": "b64_json"}`
+//! - Body: `{"model", "prompt", "n", "size": "WxH"}`
+//!   We deliberately do NOT send `response_format`. OpenAI's gpt-image-*
+//!   models reject it; DALL·E variants accept it but default sensibly
+//!   (url for DALL·E 3, b64_json for gpt-image-*). Our response parser
+//!   handles either case (b64 inline or URL-fetch fallback).
 //! - Response: `{"data": [{"b64_json": "..." | "url": "..."}]}`
 //!
 //! When the response contains `url` instead of `b64_json`, we GET the URL
@@ -71,7 +75,6 @@ struct Body<'a> {
     n: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<String>,
-    response_format: &'static str,
 }
 
 impl ImageProvider for OpenaiCompatProvider {
@@ -89,7 +92,6 @@ impl ImageProvider for OpenaiCompatProvider {
             prompt: req.prompt,
             n: req.n,
             size: req.size.map(|s| s.as_string()),
-            response_format: "b64_json",
         };
         let body_json = serde_json::to_string(&body).context("serializing request body")?;
         let url = self.url();

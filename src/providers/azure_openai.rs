@@ -4,7 +4,11 @@
 //! - URL: `{endpoint}/openai/deployments/{model}/images/generations?api-version={ver}`
 //!   (`model` is mapped to the deployment path segment internally)
 //! - Header: `api-key: {key}`
-//! - Body: `{"prompt", "n", "size": "WxH", "response_format": "b64_json"}`
+//! - Body: `{"prompt", "n", "size": "WxH"}`
+//!   We deliberately do NOT send `response_format`. DALL·E 3 defaults to
+//!   `url`, gpt-image-* defaults to (and only supports) `b64_json` and
+//!   400s when `response_format` is sent at all. Our response parser
+//!   handles either case (b64 inline or URL-fetch fallback).
 //!   (no `model` field — the deployment is in the URL)
 //! - Response: same as OpenAI: `{"data": [{"b64_json"|"url", "revised_prompt"?}]}`
 
@@ -44,7 +48,6 @@ struct Body<'a> {
     n: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<String>,
-    response_format: &'static str,
 }
 
 impl ImageProvider for AzureOpenaiProvider {
@@ -61,7 +64,6 @@ impl ImageProvider for AzureOpenaiProvider {
             prompt: req.prompt,
             n: req.n,
             size: req.size.map(|s| s.as_string()),
-            response_format: "b64_json",
         };
         let body_json = serde_json::to_string(&body).context("serializing request body")?;
         let url = self.url(req.model);

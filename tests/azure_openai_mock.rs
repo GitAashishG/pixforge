@@ -54,8 +54,7 @@ fn url_includes_deployment_and_api_version_and_uses_api_key_header() {
             .json_body(json!({
                 "prompt": "a serene lake at dawn",
                 "n": 1,
-                "size": "1024x1024",
-                "response_format": "b64_json"
+                "size": "1024x1024"
             }));
         then.status(200).json_body(json!({
             "data": [{
@@ -98,6 +97,31 @@ fn body_does_not_include_model_field() {
     let p = provider(&server);
     let mut nr = |_, _: &str, _| {};
     p.generate(&make_request("x", "dall-e-3", &extra), &mut nr)
+        .expect("ok");
+    mock.assert();
+}
+
+#[test]
+fn body_does_not_include_response_format_field() {
+    // gpt-image-1 / gpt-image-2 reject `response_format` with HTTP 400
+    // ("Unknown parameter"). DALL·E variants accept it but default sensibly.
+    // We don't send it at all and rely on the URL-fallback parser if needed.
+    let server = MockServer::start();
+    let extra = serde_json::Map::new();
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/openai/deployments/gpt-image-2/images/generations")
+            .matches(|req| {
+                let body: serde_json::Value =
+                    serde_json::from_slice(req.body.as_deref().unwrap_or(&[])).unwrap();
+                body.get("response_format").is_none()
+            });
+        then.status(200)
+            .json_body(json!({"data": [{"b64_json": TINY_PNG_B64}]}));
+    });
+    let p = provider(&server);
+    let mut nr = |_, _: &str, _| {};
+    p.generate(&make_request("x", "gpt-image-2", &extra), &mut nr)
         .expect("ok");
     mock.assert();
 }

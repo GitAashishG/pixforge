@@ -52,8 +52,7 @@ fn bearer_auth_sends_authorization_header_and_parses_b64() {
                 "model": "gpt-image-1",
                 "prompt": "a robot",
                 "n": 1,
-                "size": "1024x1024",
-                "response_format": "b64_json"
+                "size": "1024x1024"
             }));
         then.status(200).json_body(json!({
             "data": [{
