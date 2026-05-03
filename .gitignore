@@ -1,0 +1,22 @@
+/target
+
+# Secrets — never commit
+.env
+.env.*
+*.key
+*.pem
+secrets.toml
+config.toml
+
+# Generated images and their prompt sidecars (anywhere in the tree)
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.prompt.json
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp
