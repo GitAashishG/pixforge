@@ -146,6 +146,10 @@ impl Profile {
     /// Read the API key from the env var named in `api_key_env`. Errors
     /// distinguish unset / empty so the user knows what to fix.
     /// Returns `Ok(None)` only when `auth_style == None`.
+    ///
+    /// Defensive: if the env var name is over 32 chars (already validated at
+    /// config-parse time, but belt-and-suspenders), redact it in error
+    /// messages so a bypassed validation can't leak a pasted secret.
     #[allow(dead_code)] // consumed by adapters in the next commits
     pub fn read_api_key(&self) -> Result<Option<String>> {
         if matches!(self.auth_style, AuthStyle::None) {
@@ -158,20 +162,21 @@ impl Profile {
                 self.auth_style
             )
         })?;
+        let display = redact_if_suspicious(var);
         match env::var(var) {
             Err(env::VarError::NotPresent) => Err(anyhow!(
-                "profile {:?}: ${var} is not set (required by api_key_env)",
+                "profile {:?}: ${display} is not set (required by api_key_env)",
                 self.name
             )),
             Err(env::VarError::NotUnicode(_)) => Err(anyhow!(
-                "profile {:?}: ${var} contains non-UTF8 bytes",
+                "profile {:?}: ${display} contains non-UTF8 bytes",
                 self.name
             )),
             Ok(s) => {
                 let trimmed = s.trim();
                 if trimmed.is_empty() {
                     Err(anyhow!(
-                        "profile {:?}: ${var} is set but empty",
+                        "profile {:?}: ${display} is set but empty",
                         self.name
                     ))
                 } else {
@@ -326,6 +331,9 @@ fn resolve_profile(name: String, raw: RawProfile) -> Result<Profile> {
     };
 
     let api_key_env = raw.api_key_env.clone();
+    if let Some(name) = &api_key_env {
+        validate_env_var_name(name)?;
+    }
     if !matches!(auth_style, AuthStyle::None) && api_key_env.is_none() {
         bail!(
             "`api_key_env` is required (auth_style = {:?}). \
@@ -386,7 +394,79 @@ fn default_auth_style(provider: ProviderKind) -> AuthStyle {
     }
 }
 
-/// Reject endpoints that already include a known per-provider path segment
+/// If the env var name is suspiciously long or contains characters not in the
+/// POSIX env-var character set, redact it to `<redacted N chars>` so that we
+/// never echo a pasted secret in error messages. Validation at config-parse
+/// time is the primary defense; this is a runtime backstop.
+fn redact_if_suspicious(name: &str) -> String {
+    let len = name.len();
+    let looks_safe = !name.is_empty()
+        && len <= 32
+        && name
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_alphabetic() || c == '_')
+            .unwrap_or(false)
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if looks_safe {
+        name.to_string()
+    } else {
+        format!("<redacted-{len}-chars>")
+    }
+}
+
+
+/// Reject `api_key_env` values that don't look like POSIX environment variable
+/// names. This catches the common mistake of pasting an actual secret as the
+/// `api_key_env` value (a long alphanumeric token), which would otherwise
+/// leak the secret into error messages when the lookup fails.
+///
+/// IMPORTANT: the returned error must NEVER contain the offending value.
+/// We only report length and that it failed validation.
+fn validate_env_var_name(s: &str) -> Result<()> {
+    let len = s.len();
+    if s.is_empty() {
+        bail!(
+            "`api_key_env` is an empty string. It must be the NAME of an \
+             environment variable (e.g. AZURE_API_KEY)."
+        );
+    }
+    let valid = s
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_alphabetic() || c == '_')
+        .unwrap_or(false)
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !valid {
+        bail!(
+            "`api_key_env` value (length {len}) does not look like an environment \
+             variable name. It must match `[A-Za-z_][A-Za-z0-9_]*`.\n\n\
+             Did you paste the secret value here by mistake? \
+             `api_key_env` is the NAME of an env var (e.g. `api_key_env = \"AZURE_API_KEY\"`); \
+             the secret value goes in the env var itself \
+             (e.g. `export AZURE_API_KEY=\"<the-secret>\"`).\n\n\
+             If you did paste a real secret, treat it as compromised: rotate the key now \
+             with your provider, then clear your shell history and terminal scrollback."
+        );
+    }
+    if len > 32 {
+        bail!(
+            "`api_key_env` value is suspiciously long (length {len}). \
+             It must be the NAME of an env var, not the secret itself. \
+             POSIX env var names are typically under 32 characters.\n\n\
+             Did you paste the secret value here by mistake? \
+             `api_key_env` is the NAME of an env var (e.g. `api_key_env = \"AZURE_API_KEY\"`); \
+             the secret value goes in the env var itself \
+             (e.g. `export AZURE_API_KEY=\"<the-secret>\"`).\n\n\
+             If you did paste a real secret, treat it as compromised: rotate the key now \
+             with your provider, then clear your shell history and terminal scrollback."
+        );
+    }
+    Ok(())
+}
+
+
 /// or a query string. We construct the path ourselves; if the user pasted
 /// the full URL from a quickstart doc, that would produce a doubled-up URL
 /// like `.../mai/v1/.../mai/v1/...` and a confusing 404.

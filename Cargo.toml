@@ -1,6 +1,6 @@
 [package]
 name = "pixforge"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 rust-version = "1.74"
 description = "Fast CLI to generate images via OpenAI, Azure, Gemini, LocalAI, and other image-gen providers."
