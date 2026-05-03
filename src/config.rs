@@ -244,8 +244,20 @@ impl LoadedConfig {
             profiles.insert(name, p);
         }
         if profiles.is_empty() {
+            let commented = find_commented_profiles(text);
+            if !commented.is_empty() {
+                bail!(
+                    "{} contains no enabled profiles, but does contain commented-out \
+                     profile blocks: {}.\n\n\
+                     Remove the leading `# ` from one of those `[profile.X]` blocks \
+                     (and its lines) to enable it.",
+                    source_path.display(),
+                    commented.join(", ")
+                );
+            }
             bail!(
-                "{} contains no profiles. Add at least one [profile.X] section.",
+                "{} contains no profiles. Add at least one [profile.X] section, \
+                 or run `pixforge init --force` to overwrite with the starter template.",
                 source_path.display()
             );
         }
@@ -336,7 +348,11 @@ fn resolve_profile(name: String, raw: RawProfile) -> Result<Profile> {
     let endpoint = match (provider, raw.endpoint.clone()) {
         (ProviderKind::Gemini, None) => DEFAULT_GEMINI_ENDPOINT.to_string(),
         (_, None) => bail!("`endpoint` is required for provider {:?}", provider.id()),
-        (_, Some(e)) => e.trim_end_matches('/').to_string(),
+        (_, Some(e)) => {
+            let trimmed = e.trim_end_matches('/').to_string();
+            check_endpoint_is_base(&trimmed, provider)?;
+            trimmed
+        }
     };
 
     let api_version = match (provider, raw.api_version.clone()) {
@@ -370,6 +386,63 @@ fn default_auth_style(provider: ProviderKind) -> AuthStyle {
     }
 }
 
+/// Reject endpoints that already include a known per-provider path segment
+/// or a query string. We construct the path ourselves; if the user pasted
+/// the full URL from a quickstart doc, that would produce a doubled-up URL
+/// like `.../mai/v1/.../mai/v1/...` and a confusing 404.
+///
+/// Heuristic and intentionally not exhaustive — the goal is to catch the
+/// obvious copy-paste mistakes, not validate URLs in general.
+fn check_endpoint_is_base(endpoint: &str, provider: ProviderKind) -> Result<()> {
+    if endpoint.contains('?') {
+        bail!(
+            "endpoint contains a query string ({:?}). It should be just the base URL \
+             (e.g. \"https://your-resource.services.ai.azure.com\") — pixforge appends \
+             the path and api-version itself.",
+            endpoint
+        );
+    }
+    let lower = endpoint.to_ascii_lowercase();
+    let bad_paths: &[&str] = match provider {
+        ProviderKind::AzureMai => &["/mai/v1/", "/images/generations"],
+        ProviderKind::AzureOpenai => &["/openai/deployments/", "/images/generations"],
+        ProviderKind::OpenaiCompat => &["/images/generations"],
+        ProviderKind::Gemini => &[":generatecontent", "/v1beta/models/"],
+    };
+    for path in bad_paths {
+        if lower.contains(path) {
+            bail!(
+                "endpoint includes the API path {:?}. It should be just the base URL \
+                 (e.g. for azure-mai: \"https://your-resource.services.ai.azure.com\"); \
+                 pixforge appends the rest itself. Got: {:?}",
+                path,
+                endpoint
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Scan `text` for lines that look like commented-out `[profile.X]` headers,
+/// returning the profile names found. Used to produce a more helpful error
+/// when the parsed config has zero active profiles.
+fn find_commented_profiles(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with('#') {
+            continue;
+        }
+        let after_hash = trimmed.trim_start_matches('#').trim_start();
+        if let Some(rest) = after_hash.strip_prefix("[profile.") {
+            if let Some(end) = rest.find(']') {
+                names.push(rest[..end].to_string());
+            }
+        }
+    }
+    names
+}
+
 // ---------------------------------------------------------------------------
 // `pixforge init` template
 // ---------------------------------------------------------------------------
@@ -377,7 +450,24 @@ fn default_auth_style(provider: ProviderKind) -> AuthStyle {
 pub const STARTER_CONFIG: &str = r#"# pixforge config — see https://github.com/GitAashishG/pixforge
 #
 # Pick a profile to use by default; override per call with `--profile <name>`.
-default_profile = "azure-mai"
+default_profile = "openai"
+
+# ---------- OpenAI (active by default) ----------
+# Edit `model` if needed, then export OPENAI_API_KEY in your shell:
+#   export OPENAI_API_KEY="sk-..."
+[profile.openai]
+provider     = "openai-compat"
+endpoint     = "https://api.openai.com/v1"
+model        = "gpt-image-1"
+api_key_env  = "OPENAI_API_KEY"
+# auth_style = "bearer"   # default
+
+# ---------- Other providers (uncomment a block to enable it) ----------
+#
+# Tip: a profile is "active" only when its `[profile.X]` line and all the
+# lines below it do NOT start with `#`. The other examples below are
+# commented out by default. To use one, set `default_profile` above to its
+# name and remove the leading `# ` from each line of its block.
 
 # ---------- Azure MAI (Microsoft AI image models on Azure) ----------
 # [profile.azure-mai]
@@ -394,14 +484,6 @@ default_profile = "azure-mai"
 # model        = "dall-e-3"
 # api_version  = "2024-02-01"
 # api_key_env  = "AZURE_OPENAI_API_KEY"
-
-# ---------- OpenAI ----------
-# [profile.openai]
-# provider     = "openai-compat"
-# endpoint     = "https://api.openai.com/v1"
-# model        = "gpt-image-1"
-# api_key_env  = "OPENAI_API_KEY"
-# # auth_style = "bearer"   # default
 
 # ---------- Google Gemini (native API; OpenAI-compat does NOT cover images) ----------
 # [profile.gemini]
