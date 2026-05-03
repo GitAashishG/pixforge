@@ -7,6 +7,7 @@ use std::io::Read;
 use std::process::ExitCode;
 
 use crate::cli::{Cli, Command, ProfileCommand};
+use clap::CommandFactory;
 use pixforge::config::{
     self, EnvKeyStatus, LoadedConfig, Profile, ProviderKind,
 };
@@ -18,6 +19,7 @@ const EXIT_GENERIC: u8 = 1;
 const EXIT_CONFIG: u8 = 2;
 
 fn main() -> ExitCode {
+    reset_sigpipe();
     let args = Cli::parse();
     let quiet = args.quiet;
     match dispatch(args) {
@@ -56,9 +58,42 @@ fn dispatch(args: Cli) -> Result<(), RunError> {
         Some(Command::Profile {
             action: ProfileCommand::Show { name },
         }) => cmd_profile_show(&name).map_err(RunError::Config),
+        Some(Command::Completions { shell }) => cmd_completions(shell).map_err(RunError::Other),
+        Some(Command::Man) => cmd_man().map_err(RunError::Other),
         None => cmd_generate(args),
     }
 }
+
+fn cmd_completions(shell: clap_complete::Shell) -> Result<()> {
+    let mut cmd = Cli::command();
+    let bin_name = cmd.get_name().to_string();
+    clap_complete::generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
+    Ok(())
+}
+
+fn cmd_man() -> Result<()> {
+    let cmd = Cli::command();
+    let man = clap_mangen::Man::new(cmd);
+    man.render(&mut std::io::stdout())
+        .context("rendering man page")?;
+    Ok(())
+}
+
+/// Restore the default SIGPIPE behavior on Unix so that piping into
+/// commands like `head` terminates pixforge silently instead of panicking
+/// when stdout is closed early. No-op on Windows.
+#[cfg(unix)]
+fn reset_sigpipe() {
+    // SAFETY: setting a signal handler from the main thread before any
+    // other threads are spawned is sound. SIG_DFL for SIGPIPE causes the
+    // process to terminate quietly when writing to a closed pipe.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn reset_sigpipe() {}
 
 fn cmd_config_path() -> Result<()> {
     let path = config::config_path()?;

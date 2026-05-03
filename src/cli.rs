@@ -75,6 +75,22 @@ pub enum Command {
         #[command(subcommand)]
         action: ProfileCommand,
     },
+    /// Print shell completion script to stdout.
+    ///
+    /// Examples:
+    ///   pixforge completions bash > /usr/local/etc/bash_completion.d/pixforge
+    ///   pixforge completions zsh  > "${fpath[1]}/_pixforge"
+    ///   pixforge completions fish > ~/.config/fish/completions/pixforge.fish
+    Completions {
+        /// The shell to generate completions for.
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
+    /// Print a man page (roff format) to stdout.
+    ///
+    /// Example:
+    ///   pixforge man > /usr/local/share/man/man1/pixforge.1
+    Man,
 }
 
 #[derive(Debug, Subcommand)]
