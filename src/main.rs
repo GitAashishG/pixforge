@@ -1,7 +1,4 @@
 mod cli;
-mod config;
-mod output;
-mod providers;
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
@@ -10,8 +7,11 @@ use std::io::Read;
 use std::process::ExitCode;
 
 use crate::cli::{Cli, Command, ProfileCommand};
-use crate::config::{EnvKeyStatus, LoadedConfig, Profile, ProviderKind};
-use crate::providers::{ImageProvider, Request, Size};
+use pixforge::config::{
+    self, EnvKeyStatus, LoadedConfig, Profile, ProviderKind,
+};
+use pixforge::output;
+use pixforge::providers::{self, ImageProvider, Request, Size};
 
 const EXIT_OK: u8 = 0;
 const EXIT_GENERIC: u8 = 1;
@@ -263,10 +263,22 @@ fn apply_overrides(mut p: Profile, args: &Cli) -> Result<Profile> {
 /// helpful "not implemented yet" error for adapters that haven't landed yet.
 fn build_provider(profile: &Profile) -> Result<Box<dyn ImageProvider>> {
     match profile.provider {
-        ProviderKind::AzureMai => Err(anyhow!(
-            "azure-mai adapter is being ported to the new trait \
-             (next commit). Re-run after that lands."
-        )),
+        ProviderKind::AzureMai => {
+            let api_key = profile.read_api_key()?.ok_or_else(|| {
+                anyhow!("internal: azure-mai requires an api key but none resolved")
+            })?;
+            let api_version = profile
+                .api_version
+                .clone()
+                .unwrap_or_else(|| "preview".to_string());
+            Ok(Box::new(providers::azure_mai::AzureMaiProvider {
+                endpoint: profile.endpoint.clone(),
+                api_version,
+                api_key,
+                timeout_secs: profile.timeout_secs,
+                max_attempts: profile.max_attempts,
+            }))
+        }
         ProviderKind::AzureOpenai => Err(anyhow!(
             "azure-openai adapter not implemented yet (planned for v0.2)"
         )),

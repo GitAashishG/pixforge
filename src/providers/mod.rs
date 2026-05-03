@@ -10,13 +10,15 @@
 //! local and explicit.
 
 // Helpers and the canonical Request struct are constructed by callers but
-// not yet *consumed* until the first adapter lands. Allow until then.
+// not yet *consumed* by every adapter until the rest land. Allow until then.
 #![allow(dead_code)]
 
 use anyhow::{anyhow, bail, Context, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde_json::Value;
 use std::time::Duration;
+
+pub mod azure_mai;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Size {
