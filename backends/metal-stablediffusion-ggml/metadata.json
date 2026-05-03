@@ -1,6 +1,0 @@
-{
-  "alias": "stablediffusion-ggml",
-  "name": "metal-stablediffusion-ggml",
-  "gallery_url": "github:mudler/LocalAI/backend/index.yaml@master",
-  "installed_at": "2026-05-03T15:36:52-07:00"
-}

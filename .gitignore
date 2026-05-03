@@ -15,6 +15,12 @@ config.toml
 *.webp
 *.prompt.json
 
+# LocalAI runtime artifacts (created if `local-ai run` is invoked from the repo)
+/backends/
+/aria-*.json
+/aria-*.log
+/models/
+
 # OS / editor cruft
 .DS_Store
 .idea/
