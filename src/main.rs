@@ -318,15 +318,19 @@ fn build_provider(profile: &Profile) -> Result<Box<dyn ImageProvider>> {
             let api_key = profile.read_api_key()?.ok_or_else(|| {
                 anyhow!("internal: azure-openai requires an api key but none resolved")
             })?;
-            let api_version = profile.api_version.clone().ok_or_else(|| {
-                anyhow!(
-                    "internal: azure-openai requires api_version (config validator should have caught)"
-                )
-            })?;
+            let dialect = match profile.azure_openai_dialect {
+                config::AzureOpenaiDialect::Deployment => {
+                    providers::azure_openai::Dialect::Deployment
+                }
+                config::AzureOpenaiDialect::V1 => providers::azure_openai::Dialect::V1,
+            };
+            // api_version is required only for the Deployment dialect; V1 ignores it.
+            let api_version = profile.api_version.clone().unwrap_or_default();
             Ok(Box::new(providers::azure_openai::AzureOpenaiProvider {
                 endpoint: profile.endpoint.clone(),
                 api_version,
                 api_key,
+                dialect,
                 timeout_secs: profile.timeout_secs,
                 max_attempts: profile.max_attempts,
             }))

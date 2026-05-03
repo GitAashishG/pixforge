@@ -62,6 +62,10 @@ struct RawProfile {
     timeout_secs: Option<u64>,
     max_attempts: Option<u32>,
 
+    /// Only meaningful for `provider = "azure-openai"`. Values: `deployment`
+    /// (default, for DALL·E 2/3) or `v1` (required for gpt-image-1, gpt-image-2).
+    dialect: Option<String>,
+
     /// Hard-rejected at parse time. We *accept* the field in the schema only
     /// so we can produce a precise error message instead of a generic
     /// "unknown field". See [`RawConfig::validate`].
@@ -125,6 +129,30 @@ impl AuthStyle {
     }
 }
 
+/// Which Azure OpenAI URL dialect to use. Only consulted for
+/// `provider = "azure-openai"` profiles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AzureOpenaiDialect {
+    /// Legacy `/openai/deployments/{name}/images/generations?api-version=...`
+    /// for DALL·E 2 / DALL·E 3.
+    Deployment,
+    /// Modern `/openai/v1/images/generations` for gpt-image-1, gpt-image-2,
+    /// and any model released after Aug 2025.
+    V1,
+}
+
+impl AzureOpenaiDialect {
+    fn parse(s: &str) -> Result<Self> {
+        match s {
+            "deployment" => Ok(Self::Deployment),
+            "v1" => Ok(Self::V1),
+            other => bail!(
+                "unknown dialect {other:?} for provider \"azure-openai\". Valid: deployment, v1"
+            ),
+        }
+    }
+}
+
 /// A fully validated profile. Everything an adapter needs is already
 /// resolved to native Rust types.
 #[derive(Debug, Clone)]
@@ -136,6 +164,8 @@ pub struct Profile {
     pub api_version: Option<String>,
     pub api_key_env: Option<String>,
     pub auth_style: AuthStyle,
+    /// Only meaningful when `provider == AzureOpenai`. Defaults to `Deployment`.
+    pub azure_openai_dialect: AzureOpenaiDialect,
     pub width: u32,
     pub height: u32,
     pub timeout_secs: u64,
@@ -363,12 +393,21 @@ fn resolve_profile(name: String, raw: RawProfile) -> Result<Profile> {
         }
     };
 
-    let api_version = match (provider, raw.api_version.clone()) {
-        (ProviderKind::AzureMai, None) => Some(DEFAULT_API_VERSION_AZURE_MAI.to_string()),
-        (ProviderKind::AzureOpenai, None) => bail!(
-            "`api_version` is required for provider \"azure-openai\" (e.g. \"2024-02-01\")"
+    let azure_openai_dialect = match (provider, raw.dialect.as_deref()) {
+        (ProviderKind::AzureOpenai, Some(s)) => AzureOpenaiDialect::parse(s)?,
+        (ProviderKind::AzureOpenai, None) => AzureOpenaiDialect::Deployment,
+        (_, Some(_)) => bail!("`dialect` is only valid for provider = \"azure-openai\""),
+        (_, None) => AzureOpenaiDialect::Deployment, // ignored for non-azure-openai
+    };
+
+    let api_version = match (provider, azure_openai_dialect, raw.api_version.clone()) {
+        (ProviderKind::AzureMai, _, None) => Some(DEFAULT_API_VERSION_AZURE_MAI.to_string()),
+        (ProviderKind::AzureOpenai, AzureOpenaiDialect::Deployment, None) => bail!(
+            "`api_version` is required for provider \"azure-openai\" with the default `deployment` dialect (e.g. api_version = \"2024-02-01\"). \
+             Or set `dialect = \"v1\"` for gpt-image-1, gpt-image-2, and other newer models — those don't use api_version."
         ),
-        (_, v) => v,
+        (ProviderKind::AzureOpenai, AzureOpenaiDialect::V1, _) => None,
+        (_, _, v) => v,
     };
 
     Ok(Profile {
@@ -379,6 +418,7 @@ fn resolve_profile(name: String, raw: RawProfile) -> Result<Profile> {
         api_version,
         api_key_env,
         auth_style,
+        azure_openai_dialect,
         width: raw.width.unwrap_or(DEFAULT_WIDTH),
         height: raw.height.unwrap_or(DEFAULT_HEIGHT),
         timeout_secs: raw.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS),
@@ -485,7 +525,11 @@ fn check_endpoint_is_base(endpoint: &str, provider: ProviderKind) -> Result<()> 
     let lower = endpoint.to_ascii_lowercase();
     let bad_paths: &[&str] = match provider {
         ProviderKind::AzureMai => &["/mai/v1/", "/images/generations"],
-        ProviderKind::AzureOpenai => &["/openai/deployments/", "/images/generations"],
+        ProviderKind::AzureOpenai => &[
+            "/openai/deployments/",
+            "/openai/v1/",
+            "/images/generations",
+        ],
         ProviderKind::OpenaiCompat => &["/images/generations"],
         ProviderKind::Gemini => &[":generatecontent", "/v1beta/models/"],
     };
@@ -557,13 +601,22 @@ api_key_env  = "OPENAI_API_KEY"
 # api_key_env  = "AZURE_API_KEY"
 # api_version  = "preview"
 
-# ---------- Azure OpenAI (DALL·E etc.) ----------
+# ---------- Azure OpenAI: DALL·E (legacy `deployment` dialect) ----------
+# [profile.azure-openai-dalle]
+# provider     = "azure-openai"
+# endpoint     = "https://your-resource.openai.azure.com"
+# model        = "dall-e-3"          # deployment name in your Azure resource
+# api_version  = "2024-02-01"
+# api_key_env  = "AZURE_OPENAI_API_KEY"
+# # dialect    = "deployment"        # default
+
+# ---------- Azure OpenAI: gpt-image-1 / gpt-image-2 (modern `v1` dialect) ----------
 # [profile.azure-openai]
 # provider     = "azure-openai"
 # endpoint     = "https://your-resource.openai.azure.com"
-# model        = "dall-e-3"
-# api_version  = "2024-02-01"
+# model        = "gpt-image-2"       # deployment name in your Azure resource
 # api_key_env  = "AZURE_OPENAI_API_KEY"
+# dialect      = "v1"                # required for gpt-image-* models
 
 # ---------- Google Gemini (native API; OpenAI-compat does NOT cover images) ----------
 # [profile.gemini]

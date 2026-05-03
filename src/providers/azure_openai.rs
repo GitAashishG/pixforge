@@ -1,16 +1,24 @@
 //! Azure OpenAI image generation provider.
 //!
-//! API contract:
-//! - URL: `{endpoint}/openai/deployments/{model}/images/generations?api-version={ver}`
-//!   (`model` is mapped to the deployment path segment internally)
-//! - Header: `api-key: {key}`
-//! - Body: `{"prompt", "n", "size": "WxH"}`
-//!   We deliberately do NOT send `response_format`. DALL·E 3 defaults to
-//!   `url`, gpt-image-* defaults to (and only supports) `b64_json` and
-//!   400s when `response_format` is sent at all. Our response parser
-//!   handles either case (b64 inline or URL-fetch fallback).
-//!   (no `model` field — the deployment is in the URL)
-//! - Response: same as OpenAI: `{"data": [{"b64_json"|"url", "revised_prompt"?}]}`
+//! Two URL dialects are supported:
+//!
+//! - **`deployment`** (legacy, default): used by DALL·E 2 / DALL·E 3.
+//!   - URL: `{endpoint}/openai/deployments/{model}/images/generations?api-version={ver}`
+//!   - Body: `{"prompt", "n", "size"}` — model is in the URL, NOT the body.
+//!   - Requires a dated `api_version` like `2024-02-01`.
+//!
+//! - **`v1`** (modern, required for `gpt-image-1` / `gpt-image-2`): the new
+//!   Azure-OpenAI v1 API. Released ~Aug 2025. Older dated api-versions hang
+//!   indefinitely on these models because the legacy URL doesn't recognize
+//!   them.
+//!   - URL: `{endpoint}/openai/v1/images/generations` (no api-version)
+//!   - Body: `{"model", "prompt", "n", "size"}` — model goes in the body.
+//!
+//! In both dialects: header is `api-key: {key}`. We do NOT send
+//! `response_format` (gpt-image-* rejects it; DALL·E variants default
+//! sensibly and our parser handles both b64 and url responses).
+//!
+//! Response shape (both dialects): `{"data": [{"b64_json"|"url", "revised_prompt"?}]}`
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Serialize;
@@ -23,27 +31,51 @@ use super::{
 
 const PROVIDER_ID: &str = "azure-openai";
 
+/// Which Azure OpenAI URL dialect this profile speaks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dialect {
+    /// Legacy `/openai/deployments/{name}/images/generations?api-version=...`.
+    /// Required for DALL·E 2 / DALL·E 3.
+    Deployment,
+    /// Modern `/openai/v1/images/generations` (no api-version).
+    /// Required for gpt-image-1, gpt-image-2 and any post-2025 image model.
+    V1,
+}
+
 pub struct AzureOpenaiProvider {
     pub endpoint: String,
+    /// Only consulted when `dialect = Dialect::Deployment`.
     pub api_version: String,
     pub api_key: String,
+    pub dialect: Dialect,
     pub timeout_secs: u64,
     pub max_attempts: u32,
 }
 
 impl AzureOpenaiProvider {
     fn url(&self, deployment: &str) -> String {
-        format!(
-            "{}/openai/deployments/{}/images/generations?api-version={}",
-            self.endpoint.trim_end_matches('/'),
-            deployment,
-            self.api_version
-        )
+        let base = self.endpoint.trim_end_matches('/');
+        match self.dialect {
+            Dialect::Deployment => format!(
+                "{}/openai/deployments/{}/images/generations?api-version={}",
+                base, deployment, self.api_version
+            ),
+            Dialect::V1 => format!("{}/openai/v1/images/generations", base),
+        }
     }
 }
 
 #[derive(Serialize)]
-struct Body<'a> {
+struct DeploymentBody<'a> {
+    prompt: &'a str,
+    n: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<String>,
+}
+
+#[derive(Serialize)]
+struct V1Body<'a> {
+    model: &'a str,
     prompt: &'a str,
     n: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,12 +92,20 @@ impl ImageProvider for AzureOpenaiProvider {
         req: &Request<'_>,
         on_retry: &mut dyn FnMut(u32, &str, f64),
     ) -> Result<Response> {
-        let body = Body {
-            prompt: req.prompt,
-            n: req.n,
-            size: req.size.map(|s| s.as_string()),
-        };
-        let body_json = serde_json::to_string(&body).context("serializing request body")?;
+        let body_json = match self.dialect {
+            Dialect::Deployment => serde_json::to_string(&DeploymentBody {
+                prompt: req.prompt,
+                n: req.n,
+                size: req.size.map(|s| s.as_string()),
+            }),
+            Dialect::V1 => serde_json::to_string(&V1Body {
+                model: req.model,
+                prompt: req.prompt,
+                n: req.n,
+                size: req.size.map(|s| s.as_string()),
+            }),
+        }
+        .context("serializing request body")?;
         let url = self.url(req.model);
 
         let agent = build_agent(self.timeout_secs);

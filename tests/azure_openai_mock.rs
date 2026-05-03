@@ -4,7 +4,7 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use httpmock::prelude::*;
 use serde_json::json;
 
-use pixforge::providers::azure_openai::AzureOpenaiProvider;
+use pixforge::providers::azure_openai::{AzureOpenaiProvider, Dialect};
 use pixforge::providers::{ImageProvider, Request, Size};
 
 const TINY_PNG_B64: &str =
@@ -15,6 +15,18 @@ fn provider(server: &MockServer) -> AzureOpenaiProvider {
         endpoint: server.base_url(),
         api_version: "2024-02-01".to_string(),
         api_key: "az-key-xyz".to_string(),
+        dialect: Dialect::Deployment,
+        timeout_secs: 5,
+        max_attempts: 3,
+    }
+}
+
+fn v1_provider(server: &MockServer) -> AzureOpenaiProvider {
+    AzureOpenaiProvider {
+        endpoint: server.base_url(),
+        api_version: String::new(),
+        api_key: "az-key-xyz".to_string(),
+        dialect: Dialect::V1,
         timeout_secs: 5,
         max_attempts: 3,
     }
@@ -193,4 +205,77 @@ fn missing_data_array_errors_clearly() {
         .generate(&make_request("x", "dall-e-3", &extra), &mut nr)
         .expect_err("must fail");
     assert!(format!("{err}").contains("`data`"), "got: {err}");
+}
+
+// ===== V1 dialect tests (gpt-image-1, gpt-image-2) =====
+
+#[test]
+fn v1_dialect_uses_v1_url_no_api_version_and_includes_model_in_body() {
+    let server = MockServer::start();
+    let extra = serde_json::Map::new();
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/openai/v1/images/generations")
+            // No api-version query param expected.
+            .header("api-key", "az-key-xyz")
+            .header("Content-Type", "application/json")
+            .json_body(json!({
+                "model": "gpt-image-2",
+                "prompt": "a serene lake at dawn",
+                "n": 1,
+                "size": "1024x1024"
+            }));
+        then.status(200).json_body(json!({
+            "data": [{ "b64_json": TINY_PNG_B64 }]
+        }));
+    });
+    let p = v1_provider(&server);
+    let mut nr = |_, _: &str, _| panic!("no retry expected");
+    let r = p
+        .generate(&make_request("a serene lake at dawn", "gpt-image-2", &extra), &mut nr)
+        .expect("v1 dialect generate should succeed");
+    mock.assert();
+    assert_eq!(r.images[0].bytes, B64.decode(TINY_PNG_B64).unwrap());
+}
+
+#[test]
+fn v1_dialect_does_not_send_api_version_query_param() {
+    let server = MockServer::start();
+    let extra = serde_json::Map::new();
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/openai/v1/images/generations")
+            .matches(|req| !req.query_params.iter().flatten().any(|(k, _)| k == "api-version"));
+        then.status(200)
+            .json_body(json!({"data": [{"b64_json": TINY_PNG_B64}]}));
+    });
+    let p = v1_provider(&server);
+    let mut nr = |_, _: &str, _| {};
+    p.generate(&make_request("x", "gpt-image-2", &extra), &mut nr)
+        .expect("ok");
+    mock.assert();
+}
+
+#[test]
+fn v1_dialect_does_not_use_deployment_url_pattern() {
+    // Negative assertion: a request to /openai/deployments/.../images/generations
+    // should NOT happen when dialect = V1.
+    let server = MockServer::start();
+    let extra = serde_json::Map::new();
+    let wrong = server.mock(|when, then| {
+        when.method(POST)
+            .matches(|req| req.path.starts_with("/openai/deployments/"));
+        then.status(500).body("legacy URL must not be used");
+    });
+    let right = server.mock(|when, then| {
+        when.method(POST).path("/openai/v1/images/generations");
+        then.status(200)
+            .json_body(json!({"data": [{"b64_json": TINY_PNG_B64}]}));
+    });
+    let p = v1_provider(&server);
+    let mut nr = |_, _: &str, _| {};
+    p.generate(&make_request("x", "gpt-image-2", &extra), &mut nr)
+        .expect("ok");
+    assert_eq!(wrong.hits(), 0);
+    right.assert();
 }
