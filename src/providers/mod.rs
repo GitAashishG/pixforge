@@ -19,6 +19,9 @@ use serde_json::Value;
 use std::time::Duration;
 
 pub mod azure_mai;
+pub mod azure_openai;
+pub mod gemini;
+pub mod openai_compat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Size {

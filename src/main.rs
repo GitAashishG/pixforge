@@ -279,15 +279,49 @@ fn build_provider(profile: &Profile) -> Result<Box<dyn ImageProvider>> {
                 max_attempts: profile.max_attempts,
             }))
         }
-        ProviderKind::AzureOpenai => Err(anyhow!(
-            "azure-openai adapter not implemented yet (planned for v0.2)"
-        )),
-        ProviderKind::OpenaiCompat => Err(anyhow!(
-            "openai-compat adapter not implemented yet (planned for v0.2)"
-        )),
-        ProviderKind::Gemini => Err(anyhow!(
-            "gemini adapter not implemented yet (planned for v0.2)"
-        )),
+        ProviderKind::AzureOpenai => {
+            let api_key = profile.read_api_key()?.ok_or_else(|| {
+                anyhow!("internal: azure-openai requires an api key but none resolved")
+            })?;
+            let api_version = profile.api_version.clone().ok_or_else(|| {
+                anyhow!(
+                    "internal: azure-openai requires api_version (config validator should have caught)"
+                )
+            })?;
+            Ok(Box::new(providers::azure_openai::AzureOpenaiProvider {
+                endpoint: profile.endpoint.clone(),
+                api_version,
+                api_key,
+                timeout_secs: profile.timeout_secs,
+                max_attempts: profile.max_attempts,
+            }))
+        }
+        ProviderKind::OpenaiCompat => {
+            let api_key = profile.read_api_key()?;
+            let auth_style = match profile.auth_style {
+                config::AuthStyle::Bearer => providers::openai_compat::AuthStyle::Bearer,
+                config::AuthStyle::ApiKey => providers::openai_compat::AuthStyle::ApiKey,
+                config::AuthStyle::None => providers::openai_compat::AuthStyle::None,
+            };
+            Ok(Box::new(providers::openai_compat::OpenaiCompatProvider {
+                endpoint: profile.endpoint.clone(),
+                api_key,
+                auth_style,
+                timeout_secs: profile.timeout_secs,
+                max_attempts: profile.max_attempts,
+            }))
+        }
+        ProviderKind::Gemini => {
+            let api_key = profile.read_api_key()?.ok_or_else(|| {
+                anyhow!("internal: gemini requires an api key but none resolved")
+            })?;
+            Ok(Box::new(providers::gemini::GeminiProvider {
+                endpoint: profile.endpoint.clone(),
+                api_key,
+                timeout_secs: profile.timeout_secs,
+                max_attempts: profile.max_attempts,
+            }))
+        }
     }
 }
 
