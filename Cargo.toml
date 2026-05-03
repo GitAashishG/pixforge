@@ -1,12 +1,15 @@
 [package]
 name = "pixforge"
-version = "0.2.0-dev"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.74"
 description = "Fast CLI to generate images via OpenAI, Azure, Gemini, LocalAI, and other image-gen providers."
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/GitAashishG/pixforge"
+homepage = "https://github.com/GitAashishG/pixforge"
+keywords = ["cli", "image-generation", "ai", "openai", "azure"]
+categories = ["command-line-utilities", "multimedia::images"]
 
 [[bin]]
 name = "pixforge"
@@ -44,3 +47,8 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

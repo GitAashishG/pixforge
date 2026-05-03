@@ -18,22 +18,43 @@ starts and a small binary.
 
 ## Install
 
-### Homebrew (macOS / Linux)
-
-```bash
-brew install GitAashishG/tap/pixforge
-```
-
-### Shell installer (any Unix)
+### Shell installer (any Unix — recommended for v0.2)
 
 ```bash
 curl -fsSL https://github.com/GitAashishG/pixforge/releases/latest/download/pixforge-installer.sh | sh
 ```
 
+This downloads the right binary for your platform (macOS arm64/x86_64, Linux
+arm64/x86_64) and installs it into `$CARGO_HOME/bin` (defaults to
+`~/.cargo/bin`).
+
 ### From crates.io (Rust users)
 
 ```bash
 cargo install pixforge
+```
+
+### Homebrew
+
+> Coming in a follow-up release. Currently the binary ships via the shell
+> installer above and via crates.io.
+
+### Shell completions and man page
+
+After installing, set up completions and the man page from the binary itself:
+
+```bash
+# bash
+pixforge completions bash | sudo tee /usr/local/etc/bash_completion.d/pixforge >/dev/null
+
+# zsh (adjust the path to a directory in your $fpath)
+pixforge completions zsh > "${fpath[1]}/_pixforge"
+
+# fish
+pixforge completions fish > ~/.config/fish/completions/pixforge.fish
+
+# man page
+pixforge man | sudo tee /usr/local/share/man/man1/pixforge.1 >/dev/null
 ```
 
 ### Build from source
