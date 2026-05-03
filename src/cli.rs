@@ -1,7 +1,8 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-/// Fast CLI for generating images via Microsoft's MAI image models on Azure.
+/// Fast CLI for generating images via OpenAI, Azure, Gemini, LocalAI, and other
+/// image-gen providers. Configure profiles in `~/.config/pixforge/config.toml`.
 #[derive(Debug, Parser)]
 #[command(name = "pixforge", version, about, long_about = None)]
 pub struct Cli {
@@ -13,31 +14,35 @@ pub struct Cli {
     #[arg(short = 'o', long = "output", global = true)]
     pub output: Option<PathBuf>,
 
-    /// Override the deployment / model name (e.g. MAI-Image-2e).
+    /// Profile name from config.toml. Overrides PIXFORGE_PROFILE and default_profile.
+    #[arg(long = "profile", global = true)]
+    pub profile: Option<String>,
+
+    /// Override the model / deployment name for this call.
     #[arg(short = 'm', long = "model", global = true)]
     pub model: Option<String>,
 
-    /// Image width in pixels (must be >= 768; width*height <= 1,048,576).
+    /// Image width in pixels. Adapter validates against its provider's allowed sizes.
     #[arg(short = 'W', long = "width", global = true)]
     pub width: Option<u32>,
 
-    /// Image height in pixels (must be >= 768; width*height <= 1,048,576).
+    /// Image height in pixels. Adapter validates against its provider's allowed sizes.
     #[arg(short = 'H', long = "height", global = true)]
     pub height: Option<u32>,
 
-    /// Override the Azure endpoint base URL.
+    /// Override the provider endpoint URL.
     #[arg(long = "endpoint", global = true)]
     pub endpoint: Option<String>,
 
-    /// API version pinned in the request URL (default: preview).
+    /// Override the API version (where applicable).
     #[arg(long = "api-version", global = true)]
     pub api_version: Option<String>,
 
-    /// HTTP timeout in seconds for a single generation call (default: 180).
+    /// HTTP timeout in seconds for a single generation call.
     #[arg(long = "timeout", global = true)]
     pub timeout: Option<u64>,
 
-    /// Max attempts (1 + retries) for transient failures (default: 5).
+    /// Max attempts (1 + retries) for transient failures.
     #[arg(long = "max-attempts", global = true)]
     pub max_attempts: Option<u32>,
 
@@ -63,4 +68,20 @@ pub enum Command {
     },
     /// Print the resolved config file path and exit.
     ConfigPath,
+    /// List all profiles in the current config file.
+    Profiles,
+    /// Print the resolved settings for a profile (api_key shown only as env source + status).
+    Profile {
+        #[command(subcommand)]
+        action: ProfileCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProfileCommand {
+    /// Print resolved profile fields. The api_key is never printed; only the
+    /// env var name and a status (set | empty | unset).
+    Show {
+        name: String,
+    },
 }

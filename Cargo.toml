@@ -1,11 +1,12 @@
 [package]
 name = "pixforge"
-version = "0.1.0"
+version = "0.2.0-dev"
 edition = "2021"
 rust-version = "1.74"
-description = "Fast CLI to generate images via Microsoft's MAI image models on Azure."
+description = "Fast CLI to generate images via OpenAI, Azure, Gemini, LocalAI, and other image-gen providers."
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/GitAashishG/pixforge"
 
 [[bin]]
 name = "pixforge"
@@ -25,6 +26,9 @@ hex = "0.4"
 open = "5"
 is-terminal = "0.4"
 dirs = "5"
+
+[dev-dependencies]
+httpmock = "0.7"
 
 [profile.release]
 opt-level = 3

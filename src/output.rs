@@ -6,8 +6,6 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use crate::client::GenerationResult;
-
 pub fn prompt_hash(prompt: &str) -> String {
     let mut h = Sha256::new();
     h.update(prompt.as_bytes());
@@ -18,7 +16,6 @@ fn short_hash(prompt: &str) -> String {
     prompt_hash(prompt)[..6].to_string()
 }
 
-/// Compute a default output path in the current directory:
 /// `./pixforge-{YYYYMMDD-HHMMSS}-{hash6}.png`, with `-1`, `-2`, … on collision.
 pub fn default_output_path(prompt: &str) -> PathBuf {
     let stamp = Utc::now().format("%Y%m%d-%H%M%S").to_string();
@@ -32,8 +29,7 @@ pub fn default_output_path(prompt: &str) -> PathBuf {
     candidate
 }
 
-/// Write `bytes` to `path` atomically: create `path.tmp` exclusively, write+sync, rename.
-/// Refuses to clobber if `path` already exists (caller resolves collisions).
+/// Write `bytes` to `path` atomically: write to `path.tmp` then rename.
 pub fn write_image_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -65,16 +61,36 @@ fn with_extra_extension(path: &Path, extra: &str) -> PathBuf {
     PathBuf::from(s)
 }
 
+/// Inputs for the sidecar JSON. Keeps the call-site at `main.rs` from
+/// having to know the JSON field order or schema version.
+pub struct SidecarInput<'a> {
+    pub prompt: &'a str,
+    pub provider_id: &'a str,
+    pub profile_name: &'a str,
+    pub model: &'a str,
+    pub endpoint: &'a str,
+    pub width: u32,
+    pub height: u32,
+    pub mime_type: &'a str,
+    pub revised_prompt: Option<&'a str>,
+    pub latency_secs: f64,
+    pub attempts: u32,
+}
+
 #[derive(Debug, Serialize)]
 struct Sidecar<'a> {
+    schema_version: u32,
     generated_at: String,
-    deployment: &'a str,
+    provider: &'a str,
+    profile: &'a str,
+    model: &'a str,
     endpoint: &'a str,
     width: u32,
     height: u32,
     prompt: &'a str,
     prompt_hash: String,
     revised_prompt: &'a str,
+    mime_type: &'a str,
     latency_s: f64,
     attempts: u32,
 }
@@ -83,24 +99,23 @@ pub fn sidecar_path(image_path: &Path) -> PathBuf {
     with_extra_extension(image_path, "prompt.json")
 }
 
-pub fn write_sidecar(
-    image_path: &Path,
-    prompt: &str,
-    endpoint: &str,
-    res: &GenerationResult,
-) -> Result<PathBuf> {
+pub fn write_sidecar(image_path: &Path, input: &SidecarInput<'_>) -> Result<PathBuf> {
     let path = sidecar_path(image_path);
     let sidecar = Sidecar {
+        schema_version: 2,
         generated_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        deployment: &res.deployment,
-        endpoint,
-        width: res.width,
-        height: res.height,
-        prompt,
-        prompt_hash: prompt_hash(prompt),
-        revised_prompt: &res.revised_prompt,
-        latency_s: round2(res.latency_secs),
-        attempts: res.attempts,
+        provider: input.provider_id,
+        profile: input.profile_name,
+        model: input.model,
+        endpoint: input.endpoint,
+        width: input.width,
+        height: input.height,
+        prompt: input.prompt,
+        prompt_hash: prompt_hash(input.prompt),
+        revised_prompt: input.revised_prompt.unwrap_or(""),
+        mime_type: input.mime_type,
+        latency_s: round2(input.latency_secs),
+        attempts: input.attempts,
     };
     let mut text = serde_json::to_string_pretty(&sidecar).context("serializing sidecar")?;
     text.push('\n');
@@ -115,8 +130,8 @@ fn round2(x: f64) -> f64 {
     (x * 100.0).round() / 100.0
 }
 
-/// Best-effort: open `path` in the OS default viewer. Errors are returned for the
-/// caller to log (non-fatal).
+/// Best-effort: open `path` in the OS default viewer. Returns the error
+/// for the caller to log (non-fatal).
 pub fn open_in_default_app(path: &Path) -> Result<()> {
     open::that_detached(path).with_context(|| format!("opening {}", path.display()))
 }
