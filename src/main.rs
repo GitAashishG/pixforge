@@ -206,7 +206,7 @@ fn cmd_generate(args: Cli) -> Result<(), RunError> {
         size_explicit,
         seed: None,
         negative_prompt: None,
-        quality: None,
+        quality: args.quality.as_deref(),
         extra: &serde_json::Map::new(),
     };
 

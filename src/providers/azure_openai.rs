@@ -71,6 +71,8 @@ struct DeploymentBody<'a> {
     n: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quality: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -80,6 +82,8 @@ struct V1Body<'a> {
     n: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quality: Option<&'a str>,
 }
 
 impl ImageProvider for AzureOpenaiProvider {
@@ -97,12 +101,14 @@ impl ImageProvider for AzureOpenaiProvider {
                 prompt: req.prompt,
                 n: req.n,
                 size: req.size.map(|s| s.as_string()),
+                quality: req.quality,
             }),
             Dialect::V1 => serde_json::to_string(&V1Body {
                 model: req.model,
                 prompt: req.prompt,
                 n: req.n,
                 size: req.size.map(|s| s.as_string()),
+                quality: req.quality,
             }),
         }
         .context("serializing request body")?;

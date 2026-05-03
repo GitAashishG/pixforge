@@ -17,7 +17,7 @@ use std::path::PathBuf;
 pub const DEFAULT_API_VERSION_AZURE_MAI: &str = "preview";
 pub const DEFAULT_WIDTH: u32 = 1024;
 pub const DEFAULT_HEIGHT: u32 = 1024;
-pub const DEFAULT_TIMEOUT_SECS: u64 = 180;
+pub const DEFAULT_TIMEOUT_SECS: u64 = 300;
 pub const DEFAULT_MAX_ATTEMPTS: u32 = 5;
 pub const DEFAULT_GEMINI_ENDPOINT: &str = "https://generativelanguage.googleapis.com";
 

@@ -38,7 +38,14 @@ pub struct Cli {
     #[arg(long = "api-version", global = true)]
     pub api_version: Option<String>,
 
-    /// HTTP timeout in seconds for a single generation call.
+    /// Quality hint passed to providers that support it (e.g. OpenAI gpt-image-*:
+    /// `low` (~15s), `medium`, `high` (~3min, default for the model)). Ignored by
+    /// providers that don't support it.
+    #[arg(long = "quality", global = true)]
+    pub quality: Option<String>,
+
+    /// HTTP timeout in seconds for a single generation call. Default 300s
+    /// (gpt-image-2 high quality can take several minutes).
     #[arg(long = "timeout", global = true)]
     pub timeout: Option<u64>,
 

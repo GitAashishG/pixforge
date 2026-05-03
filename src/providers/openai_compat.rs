@@ -75,6 +75,8 @@ struct Body<'a> {
     n: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quality: Option<&'a str>,
 }
 
 impl ImageProvider for OpenaiCompatProvider {
@@ -92,6 +94,7 @@ impl ImageProvider for OpenaiCompatProvider {
             prompt: req.prompt,
             n: req.n,
             size: req.size.map(|s| s.as_string()),
+            quality: req.quality,
         };
         let body_json = serde_json::to_string(&body).context("serializing request body")?;
         let url = self.url();

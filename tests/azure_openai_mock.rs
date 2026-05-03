@@ -279,3 +279,58 @@ fn v1_dialect_does_not_use_deployment_url_pattern() {
     assert_eq!(wrong.hits(), 0);
     right.assert();
 }
+
+#[test]
+fn v1_dialect_passes_quality_when_set() {
+    let server = MockServer::start();
+    let extra = serde_json::Map::new();
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/openai/v1/images/generations")
+            .json_body(json!({
+                "model": "gpt-image-2",
+                "prompt": "x",
+                "n": 1,
+                "size": "1024x1024",
+                "quality": "low"
+            }));
+        then.status(200)
+            .json_body(json!({"data": [{"b64_json": TINY_PNG_B64}]}));
+    });
+    let p = v1_provider(&server);
+    let req = Request {
+        prompt: "x",
+        model: "gpt-image-2",
+        n: 1,
+        size: Some(Size { width: 1024, height: 1024 }),
+        size_explicit: false,
+        seed: None,
+        negative_prompt: None,
+        quality: Some("low"),
+        extra: &extra,
+    };
+    let mut nr = |_, _: &str, _| {};
+    p.generate(&req, &mut nr).expect("ok");
+    mock.assert();
+}
+
+#[test]
+fn v1_dialect_omits_quality_when_unset() {
+    let server = MockServer::start();
+    let extra = serde_json::Map::new();
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/openai/v1/images/generations")
+            .matches(|req| {
+                let body: serde_json::Value =
+                    serde_json::from_slice(req.body.as_deref().unwrap_or(&[])).unwrap();
+                body.get("quality").is_none()
+            });
+        then.status(200)
+            .json_body(json!({"data": [{"b64_json": TINY_PNG_B64}]}));
+    });
+    let p = v1_provider(&server);
+    let mut nr = |_, _: &str, _| {};
+    p.generate(&make_request("x", "gpt-image-2", &extra), &mut nr).expect("ok");
+    mock.assert();
+}

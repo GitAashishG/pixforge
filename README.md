@@ -177,7 +177,8 @@ Options:
   -H, --height <N>               Height in px (validated per-provider)
       --endpoint <URL>           Override provider endpoint
       --api-version <STR>        Override API version (where applicable)
-      --timeout <SECS>           HTTP timeout (default: 180)
+      --quality <STR>            Quality hint (low|medium|high) for providers that support it
+      --timeout <SECS>           HTTP timeout (default: 300)
       --max-attempts <N>         Retries on 429/5xx/transport (default: 5)
       --no-open                  Don't open the image after generation
   -q, --quiet                    Suppress progress on stderr
@@ -227,7 +228,7 @@ auth_style   = ApiKey
 api_key      = env $AZURE_API_KEY (set)
 width        = 1024
 height       = 1024
-timeout_secs = 180
+timeout_secs = 300
 max_attempts = 5
 ```
 
