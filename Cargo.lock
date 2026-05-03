@@ -452,25 +452,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "imagine"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "chrono",
- "clap",
- "dirs",
- "hex",
- "is-terminal",
- "open",
- "serde",
- "serde_json",
- "sha2",
- "toml",
- "ureq",
-]
-
-[[package]]
 name = "indexmap"
 version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -622,6 +603,25 @@ name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+
+[[package]]
+name = "pixforge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "clap",
+ "dirs",
+ "hex",
+ "is-terminal",
+ "open",
+ "serde",
+ "serde_json",
+ "sha2",
+ "toml",
+ "ureq",
+]
 
 [[package]]
 name = "potential_utf"

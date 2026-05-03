@@ -19,14 +19,14 @@ fn short_hash(prompt: &str) -> String {
 }
 
 /// Compute a default output path in the current directory:
-/// `./imagine-{YYYYMMDD-HHMMSS}-{hash6}.png`, with `-1`, `-2`, … on collision.
+/// `./pixforge-{YYYYMMDD-HHMMSS}-{hash6}.png`, with `-1`, `-2`, … on collision.
 pub fn default_output_path(prompt: &str) -> PathBuf {
     let stamp = Utc::now().format("%Y%m%d-%H%M%S").to_string();
     let hash = short_hash(prompt);
-    let mut candidate = PathBuf::from(format!("./imagine-{stamp}-{hash}.png"));
+    let mut candidate = PathBuf::from(format!("./pixforge-{stamp}-{hash}.png"));
     let mut suffix = 1u32;
     while candidate.exists() {
-        candidate = PathBuf::from(format!("./imagine-{stamp}-{hash}-{suffix}.png"));
+        candidate = PathBuf::from(format!("./pixforge-{stamp}-{hash}-{suffix}.png"));
         suffix += 1;
     }
     candidate

@@ -3,13 +3,13 @@ use std::path::PathBuf;
 
 /// Fast CLI for generating images via Microsoft's MAI image models on Azure.
 #[derive(Debug, Parser)]
-#[command(name = "imagine", version, about, long_about = None)]
+#[command(name = "pixforge", version, about, long_about = None)]
 pub struct Cli {
     /// Prompt text. Use `-` to read the prompt from stdin (until EOF).
     #[arg(short = 'p', long = "prompt", global = true)]
     pub prompt: Option<String>,
 
-    /// Output PNG path. Default: ./imagine-{YYYYMMDD-HHMMSS}-{hash6}.png
+    /// Output PNG path. Default: ./pixforge-{YYYYMMDD-HHMMSS}-{hash6}.png
     #[arg(short = 'o', long = "output", global = true)]
     pub output: Option<PathBuf>,
 
@@ -55,7 +55,7 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Write a starter config file at $XDG_CONFIG_HOME/imagine/config.toml.
+    /// Write a starter config file at $XDG_CONFIG_HOME/pixforge/config.toml.
     Init {
         /// Overwrite an existing config file.
         #[arg(long = "force")]

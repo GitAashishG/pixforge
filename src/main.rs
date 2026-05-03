@@ -23,14 +23,14 @@ fn main() -> ExitCode {
     match dispatch(args) {
         Ok(()) => ExitCode::from(EXIT_OK),
         Err(RunError::Config(e)) => {
-            eprintln!("imagine: {e:#}");
+            eprintln!("pixforge: {e:#}");
             ExitCode::from(EXIT_CONFIG)
         }
         Err(RunError::Other(e)) => {
             if quiet {
-                eprintln!("imagine: {e}");
+                eprintln!("pixforge: {e}");
             } else {
-                eprintln!("imagine: {e:#}");
+                eprintln!("pixforge: {e:#}");
             }
             ExitCode::from(EXIT_GENERIC)
         }
@@ -65,7 +65,7 @@ fn cmd_config_path() -> Result<()> {
 fn cmd_init(force: bool) -> Result<()> {
     let path = config::write_starter_config(force)?;
     eprintln!("wrote starter config to {}", path.display());
-    eprintln!("Edit it to set your Azure api_key, then run:  imagine -p \"your prompt\"");
+    eprintln!("Edit it to set your Azure api_key, then run:  pixforge -p \"your prompt\"");
     Ok(())
 }
 
@@ -94,7 +94,7 @@ fn cmd_generate(args: Cli) -> Result<(), RunError> {
 
     if !args.quiet {
         eprintln!(
-            "imagine: generating {dims} via {dep} → {}",
+            "pixforge: generating {dims} via {dep} → {}",
             out_path.display()
         );
     }
@@ -103,7 +103,7 @@ fn cmd_generate(args: Cli) -> Result<(), RunError> {
     let result = client
         .generate(&prompt, |attempt, msg, wait| {
             if !args.quiet {
-                eprintln!("imagine: retry attempt {attempt} ({msg}); sleeping {wait:.1}s");
+                eprintln!("pixforge: retry attempt {attempt} ({msg}); sleeping {wait:.1}s");
             }
         })
         .with_context(|| "image generation failed")?;
@@ -115,12 +115,12 @@ fn cmd_generate(args: Cli) -> Result<(), RunError> {
 
     if !args.quiet {
         eprintln!(
-            "imagine: ok ({} attempts, {:.1}s, {} bytes)",
+            "pixforge: ok ({} attempts, {:.1}s, {} bytes)",
             result.attempts,
             result.latency_secs,
             result.image_bytes.len()
         );
-        eprintln!("imagine: sidecar {}", sidecar.display());
+        eprintln!("pixforge: sidecar {}", sidecar.display());
     }
 
     println!("{}", out_path.display());
@@ -128,7 +128,7 @@ fn cmd_generate(args: Cli) -> Result<(), RunError> {
     if !args.no_open {
         if let Err(e) = output::open_in_default_app(&out_path) {
             if !args.quiet {
-                eprintln!("imagine: warning: could not open viewer: {e}");
+                eprintln!("pixforge: warning: could not open viewer: {e}");
             }
         }
     }

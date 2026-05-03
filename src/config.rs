@@ -45,14 +45,14 @@ struct FileConfig {
     max_attempts: Option<u32>,
 }
 
-/// Resolve `$XDG_CONFIG_HOME/imagine/config.toml`, defaulting to
-/// `~/.config/imagine/config.toml`. Same path on every OS for predictability.
+/// Resolve `$XDG_CONFIG_HOME/pixforge/config.toml`, defaulting to
+/// `~/.config/pixforge/config.toml`. Same path on every OS for predictability.
 pub fn config_path() -> Result<PathBuf> {
     if let Some(xdg) = env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
-        return Ok(PathBuf::from(xdg).join("imagine").join("config.toml"));
+        return Ok(PathBuf::from(xdg).join("pixforge").join("config.toml"));
     }
     let home = dirs::home_dir().ok_or_else(|| anyhow!("could not determine home directory"))?;
-    Ok(home.join(".config").join("imagine").join("config.toml"))
+    Ok(home.join(".config").join("pixforge").join("config.toml"))
 }
 
 fn load_file_config() -> Result<FileConfig> {
@@ -140,7 +140,7 @@ fn missing_api_key_error() -> anyhow::Error {
          {path}\n\n\
          Minimal config.toml:\n\
          {EXAMPLE_CONFIG}\n\
-         Run `imagine init` to scaffold it."
+         Run `pixforge init` to scaffold it."
     )
 }
 
@@ -154,7 +154,7 @@ fn missing_field_error(field: &str, env_var: &str) -> anyhow::Error {
          Set the `{env_var}` environment variable, pass `--{flag}` on the command line,\n\
          or add `{field} = \"...\"` to your config file:\n  \
          {path}\n\n\
-         Run `imagine init` to scaffold a config template."
+         Run `pixforge init` to scaffold a config template."
     )
 }
 
@@ -180,7 +180,7 @@ pub fn write_starter_config(force: bool) -> Result<PathBuf> {
             .with_context(|| format!("creating directory {}", parent.display()))?;
     }
     let body = format!(
-        "# imagine config\n\
+        "# pixforge config\n\
          # Required: endpoint, deployment, api_key (or set them via env vars / CLI flags).\n\
          endpoint   = \"https://your-resource.services.ai.azure.com\"\n\
          deployment = \"your-deployment-name\"\n\
