@@ -26,9 +26,6 @@ starts and a small binary.
 
 <img width="900" height="506" alt="demo" src="https://github.com/user-attachments/assets/1444cc16-c2cb-4980-a19b-a512742d7861" />
 
-
-(If your viewer doesn't render embedded video, watch it directly: [`docs/demo.mp4`](docs/demo.mp4))
-
 ## Install
 
 ### Homebrew (macOS / Linux)
