@@ -1,5 +1,10 @@
 # `pixforge`
 
+[![crates.io](https://img.shields.io/crates/v/pixforge.svg)](https://crates.io/crates/pixforge)
+[![Release](https://github.com/GitAashishG/pixforge/actions/workflows/release.yml/badge.svg)](https://github.com/GitAashishG/pixforge/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MSRV](https://img.shields.io/badge/msrv-1.74-orange.svg)](Cargo.toml)
+
 A fast, single-binary CLI for generating images from text prompts. Speaks
 multiple providers natively — switch between **OpenAI**, **Azure OpenAI**,
 **Azure MAI**, **Google Gemini**, and **LocalAI** by changing one config
@@ -15,6 +20,12 @@ pixforge --profile gemini -p "Watercolor mountains at dawn"
 
 Built in Rust on a synchronous HTTP stack (`ureq` + `rustls`) for fast cold
 starts and a small binary.
+
+## Demo
+
+<video src="https://github.com/GitAashishG/pixforge/raw/main/docs/demo.mp4" controls width="720"></video>
+
+(If your viewer doesn't render embedded video, watch it directly: [`docs/demo.mp4`](docs/demo.mp4))
 
 ## Install
 
