@@ -29,26 +29,33 @@ starts and a small binary.
 
 ## Install
 
-### Shell installer (any Unix — recommended for v0.2)
+### Homebrew (macOS / Linux)
 
 ```bash
-curl -fsSL https://github.com/GitAashishG/pixforge/releases/latest/download/pixforge-installer.sh | sh
+brew install GitAashishG/tap/pixforge
 ```
 
-This downloads the right binary for your platform (macOS arm64/x86_64, Linux
-arm64/x86_64) and installs it into `$CARGO_HOME/bin` (defaults to
-`~/.cargo/bin`).
-
-### From crates.io (Rust users)
+### crates.io (any Rust toolchain)
 
 ```bash
 cargo install pixforge
 ```
 
-### Homebrew
+### Shell installer (any Unix, no toolchain required)
 
-> Coming in a follow-up release. Currently the binary ships via the shell
-> installer above and via crates.io.
+```bash
+curl -fsSL https://github.com/GitAashishG/pixforge/releases/latest/download/pixforge-installer.sh | sh
+```
+
+Downloads the right pre-built binary for your platform (macOS arm64/x86_64,
+Linux arm64/x86_64) and installs it into `$CARGO_HOME/bin` (defaults to
+`~/.cargo/bin`).
+
+### Direct download
+
+Grab a `.tar.xz` (Unix) or `.zip` (Windows) for your platform from the
+[Releases page](https://github.com/GitAashishG/pixforge/releases/latest)
+and extract the `pixforge` binary anywhere on your `$PATH`.
 
 ### Shell completions and man page
 
