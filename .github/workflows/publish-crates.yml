@@ -1,0 +1,50 @@
+name: Publish to crates.io
+
+# Runs after the cargo-dist release workflow completes for a tag, so by the
+# time we publish to crates.io the GitHub release artifacts already exist.
+# Splitting it out (vs. inlining into release.yml) keeps cargo-dist's
+# generated workflow regeneratable without losing this logic on each
+# `dist generate`.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  publish:
+    name: cargo publish
+    runs-on: ubuntu-latest
+    # Don't run for pre-release tags like v1.0.0-rc.1 — only stable.
+    if: ${{ !contains(github.ref_name, '-') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Verify Cargo.toml version matches the git tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(grep -E '^version = ' Cargo.toml | head -1 | sed -E 's/.*"(.+)".*/\1/')
+          echo "tag:     $tag"
+          echo "Cargo:   $pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Cargo.toml version ($pkg) does not match git tag ($tag)" >&2
+            exit 1
+          fi
+
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --no-verify
