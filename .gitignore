@@ -8,6 +8,9 @@
 secrets.toml
 config.toml
 
+# Personal planning notes — local only, not for the public repo
+/unpublished-plans/
+
 # Generated images and their prompt sidecars (anywhere in the tree)
 *.png
 *.jpg
