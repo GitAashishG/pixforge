@@ -60,8 +60,149 @@ fn dispatch(args: Cli) -> Result<(), RunError> {
         }) => cmd_profile_show(&name).map_err(RunError::Config),
         Some(Command::Completions { shell }) => cmd_completions(shell).map_err(RunError::Other),
         Some(Command::Man) => cmd_man().map_err(RunError::Other),
+        Some(Command::Setup { .. }) => cmd_setup(args).map_err(RunError::Other),
+        Some(Command::AdvancedConfig) => cmd_advanced_config().map_err(RunError::Other),
         None => cmd_generate(args),
     }
+}
+
+fn cmd_advanced_config() -> Result<()> {
+    let path = pixforge::config::config_path()?;
+    match std::env::var("EDITOR") {
+        Ok(editor) if !editor.trim().is_empty() => {
+            eprintln!("opening {} in {}…", path.display(), editor);
+            let status = std::process::Command::new(&editor)
+                .arg(&path)
+                .status()
+                .with_context(|| format!("launching {editor}"))?;
+            if !status.success() {
+                anyhow::bail!("{editor} exited with status {status}");
+            }
+            Ok(())
+        }
+        _ => {
+            println!("{}", path.display());
+            eprintln!("(set $EDITOR to open this file directly next time.)");
+            Ok(())
+        }
+    }
+}
+
+fn cmd_setup(args: Cli) -> Result<()> {
+    use is_terminal::IsTerminal;
+    let Some(Command::Setup {
+        non_interactive,
+        provider,
+        endpoint,
+        model,
+        api_version,
+        api_key_env,
+        auth_style,
+        dialect,
+        profile_name,
+        set_default,
+    }) = args.command
+    else {
+        unreachable!("dispatch shape mismatch")
+    };
+
+    if non_interactive {
+        return run_setup_non_interactive(
+            provider,
+            endpoint,
+            model,
+            api_version,
+            api_key_env,
+            auth_style,
+            dialect,
+            profile_name,
+            set_default,
+        );
+    }
+
+    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+        anyhow::bail!(
+            "interactive setup requires a TTY on both stdin and stderr.\n\
+             Use `pixforge setup --non-interactive --provider <id> --set-endpoint <url> ...` \
+             for scripts/CI."
+        );
+    }
+
+    let path = pixforge::config::config_path()?;
+    let store = pixforge::setup::io::FsConfigStore::new(path);
+    let shell_rc = pixforge::setup::io::FsShellRcWriter::new();
+    let mut tester = pixforge::setup::io::LiveConnectionTester {
+        builder: Box::new(|p| build_provider(p)),
+    };
+    let mut prompter = pixforge::setup::io::DialoguerPrompter::default();
+    let mut deps = pixforge::setup::WizardDeps {
+        prompter: &mut prompter,
+        config: &store,
+        shell_rc: &shell_rc,
+        tester: &mut tester,
+        env: pixforge::setup::EnvProbe::from_real_env(),
+    };
+    let res = pixforge::setup::run(&mut deps).context("setup wizard failed")?;
+    eprintln!();
+    eprintln!("✓ saved profile {:?} to {}", res.profile_name, res.config_path_str);
+    if res.set_as_default {
+        eprintln!("  (set as default; just run `pixforge -p \"…\"`)");
+    } else {
+        eprintln!(
+            "  (use `pixforge --profile {} -p \"…\"`)",
+            res.profile_name
+        );
+    }
+    Ok(())
+}
+
+fn run_setup_non_interactive(
+    provider: Option<String>,
+    endpoint: Option<String>,
+    model: Option<String>,
+    api_version: Option<String>,
+    api_key_env: Option<String>,
+    auth_style: Option<String>,
+    dialect: Option<String>,
+    profile_name: Option<String>,
+    set_default: bool,
+) -> Result<()> {
+    let provider = provider.context("--non-interactive requires --provider")?;
+    let model = model.context("--non-interactive requires --set-model")?;
+    let api_key_env = api_key_env.context("--non-interactive requires --set-api-key-env")?;
+
+    let draft = pixforge::setup::config_edit::ProfileDraft {
+        provider: provider.clone(),
+        endpoint: endpoint.map(|s| s.trim_end_matches('/').to_string()),
+        model,
+        api_version,
+        api_key_env,
+        auth_style,
+        dialect,
+    };
+    draft.validate().context("validation failed")?;
+
+    let path = pixforge::config::config_path()?;
+    let store = pixforge::setup::io::FsConfigStore::new(path.clone());
+    let existing_text = pixforge::setup::ConfigStore::read(&store)?;
+    let mut existing = match existing_text {
+        Some(t) => pixforge::setup::config_edit::EditableConfig::parse(&t)?,
+        None => pixforge::setup::config_edit::EditableConfig::empty(),
+    };
+    let name = profile_name.unwrap_or_else(|| provider.clone());
+    if existing.has_profile(&name) {
+        anyhow::bail!(
+            "profile {name:?} already exists; non-interactive setup refuses to overwrite \
+             without explicit confirmation. Edit the file or pick a different --profile-name."
+        );
+    }
+    existing.upsert_profile(&name, &draft)?;
+    if set_default || existing.current_default_profile().is_none() {
+        existing.set_default_profile(&name);
+    }
+    pixforge::setup::ConfigStore::write(&store, &existing.to_string())?;
+    eprintln!("wrote profile {:?} to {}", name, path.display());
+    Ok(())
 }
 
 fn cmd_completions(shell: clap_complete::Shell) -> Result<()> {

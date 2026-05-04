@@ -362,7 +362,7 @@ fn resolve_profile(name: String, raw: RawProfile) -> Result<Profile> {
 
     let api_key_env = raw.api_key_env.clone();
     if let Some(name) = &api_key_env {
-        validate_env_var_name(name)?;
+        validate_api_key_env_name(name)?;
     }
     if !matches!(auth_style, AuthStyle::None) && api_key_env.is_none() {
         bail!(
@@ -463,7 +463,7 @@ fn redact_if_suspicious(name: &str) -> String {
 ///
 /// IMPORTANT: the returned error must NEVER contain the offending value.
 /// We only report length and that it failed validation.
-fn validate_env_var_name(s: &str) -> Result<()> {
+pub fn validate_api_key_env_name(s: &str) -> Result<()> {
     let len = s.len();
     if s.is_empty() {
         bail!(
@@ -479,6 +479,22 @@ fn validate_env_var_name(s: &str) -> Result<()> {
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_');
     if !valid {
+        // Heuristic: short values that fail validation are almost always
+        // typos (extra quotes, hyphens, etc.) — give a soft hint. Long
+        // values are likely pasted secrets — give the full warning.
+        if len <= 32 {
+            // Find the first offending character to make the hint actionable.
+            let first_bad = s
+                .chars()
+                .find(|c| !c.is_ascii_alphanumeric() && *c != '_')
+                .map(|c| format!(" (illegal character {c:?})"))
+                .unwrap_or_default();
+            bail!(
+                "`api_key_env` should match `[A-Za-z_][A-Za-z0-9_]*`{first_bad}. \
+                 It must be the NAME of an environment variable, e.g. AZURE_API_KEY \
+                 (no quotes, no spaces, no hyphens)."
+            );
+        }
         bail!(
             "`api_key_env` value (length {len}) does not look like an environment \
              variable name. It must match `[A-Za-z_][A-Za-z0-9_]*`.\n\n\
@@ -513,6 +529,38 @@ fn validate_env_var_name(s: &str) -> Result<()> {
 ///
 /// Heuristic and intentionally not exhaustive — the goal is to catch the
 /// obvious copy-paste mistakes, not validate URLs in general.
+/// Reject endpoints that already include a known per-provider path segment
+/// or a query string. We construct the path ourselves; if the user pasted
+/// the full URL from a quickstart doc, that would produce a doubled-up URL
+/// like `.../mai/v1/.../mai/v1/...` and a confusing 404.
+///
+/// Heuristic and intentionally not exhaustive — the goal is to catch the
+/// obvious copy-paste mistakes, not validate URLs in general.
+///
+/// `provider_id` is the string form (e.g. "azure-mai"). Used by the wizard
+/// to validate per-keystroke before the user has constructed a `ProviderKind`.
+pub fn validate_endpoint_for_provider(endpoint: &str, provider_id: &str) -> Result<()> {
+    let provider = ProviderKind::parse(provider_id)?;
+    check_endpoint_is_base(endpoint, provider)
+}
+
+/// Wizard-friendly check: validate that `provider_id` is recognized and
+/// that `dialect` (if set) is valid for that provider.
+pub fn validate_provider_and_dialect(provider_id: &str, dialect: Option<&str>) -> Result<()> {
+    let provider = ProviderKind::parse(provider_id)?;
+    if let Some(d) = dialect {
+        let parsed = AzureOpenaiDialect::parse(d)?;
+        if !matches!(provider, ProviderKind::AzureOpenai) {
+            bail!(
+                "`dialect` is only valid for provider = \"azure-openai\" (got {:?})",
+                provider.id()
+            );
+        }
+        let _ = parsed;
+    }
+    Ok(())
+}
+
 fn check_endpoint_is_base(endpoint: &str, provider: ProviderKind) -> Result<()> {
     if endpoint.contains('?') {
         bail!(
@@ -523,6 +571,54 @@ fn check_endpoint_is_base(endpoint: &str, provider: ProviderKind) -> Result<()> 
         );
     }
     let lower = endpoint.to_ascii_lowercase();
+
+    // Catch obvious truncations: URL ends with a known TLD prefix that
+    // suggests the user pasted a half-copied URL. e.g. ".azure.co" without
+    // the trailing "m". This is a heuristic, intentionally conservative.
+    if let Some(host_end) = lower.find("/").or_else(|| Some(lower.len())) {
+        let host_section = &lower[..host_end.min(lower.len())];
+        for bad_tld in [".azure.co", ".azure.com.", ".com.", ".io.", ".net."] {
+            if host_section.ends_with(bad_tld) {
+                bail!(
+                    "endpoint hostname looks truncated or malformed (ends with {:?}). \
+                     Did you cut off part of the URL? Got: {:?}",
+                    bad_tld,
+                    endpoint
+                );
+            }
+        }
+    }
+
+    // Catch wrong-product hostnames (Azure has TWO different domain suffixes
+    // for image gen — `.openai.azure.com` for Azure OpenAI vs
+    // `.services.ai.azure.com` for Azure MAI/AI Foundry). Mixing them up
+    // produces a successful TCP connection but a 404 or DNS failure
+    // depending on tenancy.
+    let host_mismatch = match provider {
+        ProviderKind::AzureMai => {
+            lower.contains(".openai.azure.com") && !lower.contains(".services.ai.azure.com")
+        }
+        ProviderKind::AzureOpenai => {
+            lower.contains(".services.ai.azure.com") && !lower.contains(".openai.azure.com")
+        }
+        _ => false,
+    };
+    if host_mismatch {
+        let (wrong, right) = match provider {
+            ProviderKind::AzureMai => (".openai.azure.com", ".services.ai.azure.com"),
+            ProviderKind::AzureOpenai => (".services.ai.azure.com", ".openai.azure.com"),
+            _ => unreachable!(),
+        };
+        bail!(
+            "endpoint host looks like it's for the wrong Azure product. \
+             You picked provider {:?}, which uses {:?} hostnames, but the \
+             endpoint contains {:?}. Double-check the resource in the Azure portal.",
+            provider.id(),
+            right,
+            wrong
+        );
+    }
+
     let bad_paths: &[&str] = match provider {
         ProviderKind::AzureMai => &["/mai/v1/", "/images/generations"],
         ProviderKind::AzureOpenai => &[

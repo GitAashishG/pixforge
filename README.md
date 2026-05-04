@@ -68,17 +68,23 @@ cargo build --release
 
 ## First-time setup
 
-Generate a starter config and pick which provider(s) you want to enable:
+The fastest path is the **interactive wizard**:
 
 ```bash
-pixforge init
-# wrote starter config to ~/.config/pixforge/config.toml
-
-$EDITOR "$(pixforge config-path)"
+pixforge setup
 ```
 
-Uncomment the profile(s) you want to use, set the env-var name for each
-credential, then export the matching env vars in your shell profile.
+It asks which provider you want, walks you field-by-field with inline
+validation, optionally tests the connection, optionally appends the
+`export` line to your shell config, and writes the profile. Most users
+finish in under a minute.
+
+Prefer to write TOML by hand?
+
+```bash
+pixforge init                         # writes a starter template
+pixforge advanced-config              # opens it in $EDITOR
+```
 
 `config.toml` example with two providers:
 

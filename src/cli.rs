@@ -98,6 +98,45 @@ pub enum Command {
     /// Example:
     ///   pixforge man > /usr/local/share/man/man1/pixforge.1
     Man,
+    /// Interactive setup wizard — recommended for first-time configuration.
+    /// Walks you through picking a provider, validating each field as you
+    /// type, and optionally testing the connection before saving.
+    Setup {
+        /// Skip prompts; require all fields via flags below.
+        #[arg(long = "non-interactive")]
+        non_interactive: bool,
+        /// (--non-interactive) Provider id: azure-mai|azure-openai|openai-compat|gemini
+        #[arg(long = "provider")]
+        provider: Option<String>,
+        /// (--non-interactive) Endpoint URL (where applicable).
+        #[arg(long = "set-endpoint")]
+        endpoint: Option<String>,
+        /// (--non-interactive) Model / deployment name.
+        #[arg(long = "set-model")]
+        model: Option<String>,
+        /// (--non-interactive) API version (azure-mai / azure-openai deployment dialect).
+        #[arg(long = "set-api-version")]
+        api_version: Option<String>,
+        /// (--non-interactive) Env var that holds the secret.
+        #[arg(long = "set-api-key-env")]
+        api_key_env: Option<String>,
+        /// (--non-interactive) Auth style for openai-compat: bearer|api-key|none.
+        #[arg(long = "set-auth-style")]
+        auth_style: Option<String>,
+        /// (--non-interactive) Azure OpenAI dialect: deployment|v1.
+        #[arg(long = "set-dialect")]
+        dialect: Option<String>,
+        /// (--non-interactive) Profile name to write.
+        #[arg(long = "profile-name")]
+        profile_name: Option<String>,
+        /// (--non-interactive) Set this profile as the new default.
+        #[arg(long = "set-default")]
+        set_default: bool,
+    },
+    /// Open the raw config file in $EDITOR. If $EDITOR is unset, prints
+    /// the path. For power users who'd rather edit TOML by hand than use
+    /// the wizard.
+    AdvancedConfig,
 }
 
 #[derive(Debug, Subcommand)]

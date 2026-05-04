@@ -1,6 +1,6 @@
 [package]
 name = "pixforge"
-version = "0.2.5"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.74"
 description = "Fast CLI to generate images via OpenAI, Azure, Gemini, LocalAI, and other image-gen providers."
@@ -27,6 +27,7 @@ ureq = { version = "2.10", default-features = false, features = ["tls", "json"] 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
+toml_edit = "0.22"
 base64 = "0.22"
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
@@ -35,6 +36,8 @@ hex = "0.4"
 open = "5"
 is-terminal = "0.4"
 dirs = "5"
+dialoguer = { version = "0.11", default-features = false }
+rpassword = "7.3"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
